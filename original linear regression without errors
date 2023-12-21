@@ -1,0 +1,151 @@
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import matplotlib
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression, SGDRegressor
+from scipy.stats import pearsonr
+
+medical_df = pd.read_csv(r"C:\Users\Oliver\Downloads\insurance (1).csv")
+medical_df.info()
+medical_df.describe()
+sns.set_style('darkgrid')
+matplotlib.rcParams['font.size'] = 14
+matplotlib.rcParams['figure.figsize'] = (10, 6)
+matplotlib.rcParams['figure.facecolor'] = '#00000000'
+medical_df.age.describe()
+
+medical_df.isna().sum()  # Check for NaN values
+medical_df = medical_df.dropna()  # Drop rows with NaN values
+print(medical_df.shape)
+
+sns.lmplot(x='bmi',y='charges',data=medical_df,aspect=2,height=6)
+plt.xlabel('Boby Mass Index$(kg/m^2)$: as Independent variable')
+plt.ylabel('Insurance Charges: as Dependent variable')
+plt.title('Charge Vs BMI');
+
+f = plt.figure(figsize=(14,6))
+ax = f.add_subplot(121)
+sns.scatterplot(x='age',y='charges',data=medical_df,palette='magma',hue='smoker',ax=ax)
+ax.set_title('Scatter plot of Charges vs age')
+
+ax = f.add_subplot(122)
+sns.scatterplot(x='bmi',y='charges',data=medical_df,palette='viridis',hue='smoker')
+ax.set_title('Scatter plot of Charges vs bmi')
+plt.savefig('sc.png');
+
+# Dummy variable
+categorical_columns = ['sex','children', 'smoker', 'region']
+df_encode = pd.get_dummies(data = medical_df, prefix = 'OHE', prefix_sep='_',
+               columns = categorical_columns,
+               drop_first =True,
+              dtype='int8')
+
+# Lets verify the dummay variable process
+print('Columns in original data frame:\n',medical_df.columns.values)
+print('\nNumber of rows and columns in the dataset:',medical_df.shape)
+print('\nColumns in data frame after encoding dummy variable:\n',medical_df.columns.values)
+print('\nNumber of rows and columns in the dataset:',medical_df.shape)
+
+# Histograms and Boxplots
+fig = px.histogram(medical_df, x='age', marginal='box', nbins=47, title='Distribution of Age')
+fig.update_layout(bargap=0.1)
+fig.show()
+
+fig = px.histogram(medical_df, x='bmi', marginal='box', color_discrete_sequence=['red'], title='Distribution of BMI (Body Mass Index)')
+fig.update_layout(bargap=0.1)
+fig.show()
+
+fig = px.histogram(medical_df, x='charges', marginal='box', color='smoker', color_discrete_sequence=['red', 'grey'], title='Annual Medical Charges')
+fig.update_layout(bargap=0.1)
+fig.show()
+
+fig = px.histogram(medical_df, x='charges', color='sex', color_discrete_sequence=["blue", "red"], title='Different charges over genders')
+fig.update_layout(bargap=0.1)
+fig.show()
+
+fig = px.histogram(medical_df, x="charges", marginal='box', color="region", title="Charges over different regions of U.S.A")
+fig.update_layout(bargap=0.1)
+fig.show()
+
+# Smoker Histogram
+medical_df.smoker.value_counts()
+px.histogram(medical_df, x='smoker', color='sex', title='Smoker')
+
+fig = px.histogram(medical_df, x='charges', marginal="box", color='children', title='Charges incurred by children')
+fig.update_layout(bargap=0.1)
+fig.show()
+
+# Scatter Plots
+fig = px.scatter(medical_df, x='age', y='charges', color='smoker', opacity=0.8, hover_data=['sex'], title='Age vs. Charges')
+fig.update_traces(marker_size=5)
+fig.show()
+
+fig = px.scatter(medical_df, x='bmi', y='charges', color='smoker', opacity=0.8, hover_data=['sex'], title='BMI vs. Charges')
+fig.update_traces(marker_size=5)
+fig.show()
+
+# Violin Plot
+px.violin(medical_df, x='children', y='charges')
+
+# Barplot
+sns.barplot(data=medical_df, x='sex', y='charges', hue='smoker')
+
+# Histogram with Plotly Express
+px.histogram(medical_df, x='sex', y='charges', color='region')
+
+# Correlation Matrix
+medical_df.charges.corr(medical_df.age)
+medical_df.charges.corr(medical_df.bmi)
+medical_df.children.corr(medical_df.charges)
+
+# Correlation with Smoker (binary encoding)
+smoker_values = {'no': 0, 'yes': 1}
+smoker_numeric = medical_df.smoker.map(smoker_values)
+medical_df.charges.corr(smoker_numeric)
+
+numeric_columns = medical_df.select_dtypes(include=np.number).columns
+correlation_matrix = medical_df[numeric_columns].corr()
+sns.heatmap(correlation_matrix, cmap='Blues', annot=True)
+plt.title('Correlation Matrix')
+plt.show()
+
+# Model fitting and evaluation
+model = LinearRegression()
+
+non_smoker_df = medical_df[medical_df['smoker'] == 'no']
+inputs = non_smoker_df[['age']]
+targets = non_smoker_df['charges']
+
+# Rest of the code...
+# Function to calculate RMSE
+def rmse(targets, predictions):
+    return np.sqrt(np.mean(np.square(targets - predictions)))
+
+#inputs = non_smoker_df[['age']]
+#targets = non_smoker_df.charges
+print('inputs.shape:', inputs.shape)
+print('targets.shape:', targets.shape)
+model.fit(inputs, targets)
+predictions = model.predict(inputs)
+rmse(targets, predictions)
+
+# Model fitting and evaluation with SGDRegressor
+model1 = SGDRegressor()
+model1.fit(inputs, targets)
+predictions = model1.predict(inputs)
+rmse(targets, predictions)
+
+# Model fitting and evaluation for smoker data
+smoker_df = medical_df[medical_df.smoker == 'yes']
+inputs = smoker_df[['age']]
+targets = smoker_df.charges
+print('inputs.shape:', inputs.shape)
+print('targets.shape:', targets.shape)
+model.fit(inputs, targets)
+predicted = model.predict(inputs)
+print('RMSE:', rmse(targets, predicted))
+
+# Show the plots
+plt.show()
