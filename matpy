@@ -1,0 +1,138 @@
+import numpy as np
+import scipy.io as sio
+import nibabel as nib
+import matplotlib.pyplot as plt
+
+# Load File
+data = sio.loadmat(r'C:\Users\Oliver\Downloads\MRIdata.mat')
+
+# Image reconstruction
+def mri_reconstruction(kspace):
+    return np.fft.fftshift(np.fft.ifft2(np.fft.fftshift(kspace)))
+
+# Reconstruction
+mri_img = mri_reconstruction(data['kspace_full'])
+mri_img = mri_img.astype(np.complex64)  # Use complex data type
+nib.save(nib.Nifti1Image(np.abs(mri_img), np.eye(4)), 'mri_reconsimg.nii')  # Save magnitude
+
+A = nib.load('mri_reconsimg.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='grey')
+plt.show()
+
+# Multi-Coil Reconstruction
+mri_img_coils = np.zeros_like(data['kspace_coils'], dtype=np.complex64)
+for i in range(data['kspace_coils'].shape[3]):
+    mri_img_coils[:, :, :, i] = mri_reconstruction(data['kspace_coils'][:, :, :, i])
+
+nib.save(nib.Nifti1Image(np.abs(mri_img_coils[:, :, :, 0]), np.eye(4)), 'mri_reconsimg_coil1.nii')
+nib.save(nib.Nifti1Image(np.abs(mri_img_coils[:, :, :, 1]), np.eye(4)), 'mri_reconsimg_coil2.nii')
+
+A = nib.load('mri_reconsimg_coil1.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+A = nib.load('mri_reconsimg_coil2.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+nib.save(nib.Nifti1Image(np.abs(data['coil_sensitivities'][:, :, :, 0]), np.eye(4)), 'mri_reconsimg_sens1.nii')
+nib.save(nib.Nifti1Image(np.abs(data['coil_sensitivities'][:, :, :, 1]), np.eye(4)), 'mri_reconsimg_sens2.nii')
+
+A = nib.load('mri_reconsimg_sens1.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+A = nib.load('mri_reconsimg_sens2.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+# Sum of squares
+sum_mri = np.sqrt(np.sum(mri_img_coils**2, axis=3))
+nib.save(nib.Nifti1Image(np.abs(sum_mri), np.eye(4)), 'mri_reconsimg_sum.nii')
+
+A = nib.load('mri_reconsimg_sum.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+# B3
+mri_1 = mri_img_coils[:, :, :, 0]
+mri_2 = mri_img_coils[:, :, :, 1]
+
+sum_mri_tot = (mri_1 + mri_2) / np.sqrt(data['coil_sensitivities'][:, :, :, 0]**2 + data['coil_sensitivities'][:, :, :, 1]**2)
+nib.save(nib.Nifti1Image(np.abs(sum_mri_tot), np.eye(4)), 'sum_mri_tot.nii')
+
+A = nib.load('sum_mri_tot.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+# Parallel Imaging
+mri_img_sub = np.zeros_like(data['kspace_subsampled'], dtype=np.complex64)
+for i in range(data['kspace_subsampled'].shape[3]):
+    mri_img_sub[:, :, :, i] = mri_reconstruction(data['kspace_subsampled'][:, :, :, i])
+
+nib.save(nib.Nifti1Image(np.abs(mri_img_sub[:, :, :, 0]), np.eye(4)), 'mri_img_sub1.nii')
+nib.save(nib.Nifti1Image(np.abs(mri_img_sub[:, :, :, 1]), np.eye(4)), 'mri_img_sub2.nii')
+
+A = nib.load('mri_img_sub1.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+A = nib.load('mri_img_sub1.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+af = 2  # Acceleration Factor
+fov, y, z = data['coil_sensitivities'].shape[:3]
+Image_1 = np.zeros((fov, y, z), dtype=np.complex64)
+
+for x in range(fov // af):
+    for j in range(y):
+        for i in range(z):
+            x_1 = (x - 1 + fov // 2) % fov
+            x_2 = (x - 1 + fov // 4) % (fov // 2)
+
+            C = np.array([[data['coil_sensitivities'][x, j, i, 0], data['coil_sensitivities'][x_1, j, i, 0]],
+                           [data['coil_sensitivities'][x, j, i, 1], data['coil_sensitivities'][x_1, j, i, 1]]])
+
+            Im_sub = np.array([mri_img_sub[x_2, j, i, 0], mri_img_sub[x_2, j, i, 1]])
+
+            Im_final = np.linalg.inv(C) @ Im_sub
+
+            Image_1[x, j, i] = Im_final[0]
+            Image_1[x + fov // 2, j, i] = Im_final[1]
+
+nib.save(nib.Nifti1Image(np.abs(Image_1), np.eye(4)), 'mri_sense1.nii')
+
+A = nib.load('mri_sense1.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
+
+for x in range(fov // 2):
+    for j in range(y):
+        for i in range(z):
+            C = np.array([[data['coil_sensitivities'][x, j, i, 0], data['coil_sensitivities'][x + fov // 2, j, i, 0]],
+                           [data['coil_sensitivities'][x, j, i, 1], data['coil_sensitivities'][x + fov // 2, j, i, 1]]])
+
+            Im_sub = np.array([mri_img_sub[x, j, i, 0], mri_img_sub[x, j, i, 1]])
+
+            Im_final = np.linalg.inv(C) @ Im_sub
+
+            Image_1[x + fov // 2, j, i] = Im_final[1]
+
+Image_1 = np.fft.fftshift(Image_1)
+nib.save(nib.Nifti1Image(np.abs(Image_1), np.eye(4)), 'mri_sense2.nii')
+
+A = nib.load('mri_sense2.nii').get_fdata()
+B = 100
+plt.imshow(np.abs(A[:, :, B]), cmap='gray')
+plt.show()
